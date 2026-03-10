@@ -1,0 +1,119 @@
+*agent.nvim*  Spawn and manage AI agents in Neovim
+
+==============================================================================
+CONTENTS                                                    *agent.nvim-contents*
+
+  1. Introduction ..................... |agent.nvim-intro|
+  2. Setup ............................ |agent.nvim-setup|
+  3. Commands ......................... |agent.nvim-commands|
+  4. Keymaps .......................... |agent.nvim-keymaps|
+  5. Configuration .................... |agent.nvim-config|
+  6. Agent Manager UI ................. |agent.nvim-ui|
+
+==============================================================================
+1. INTRODUCTION                                               *agent.nvim-intro*
+
+agent.nvim is a lightweight plugin for spawning and managing Claude/Codex AI
+agents as hidden terminal buffers. It requires no external dependencies and
+is fully compatible with lazy.nvim.
+
+==============================================================================
+2. SETUP                                                      *agent.nvim-setup*
+
+Call `setup()` in your config, optionally passing overrides: >lua
+
+  require("agent").setup({
+    default_agent = "claude",
+    keymaps = {
+      spawn = "<leader>as",
+    },
+  })
+<
+Passing no arguments or an empty table uses all defaults.
+
+To disable all keymaps: >lua
+
+  require("agent").setup({ keymaps = false })
+<
+
+==============================================================================
+3. COMMANDS                                                *agent.nvim-commands*
+
+*:AgentSpawn* [type]
+  Spawn a new agent. `type` is optional and defaults to `default_agent` in
+  config. Accepted values: `claude`, `codex`.
+
+*:AgentList*
+  Open the agent manager floating window. Lists all agents with their id,
+  type, and status.
+
+*:AgentKill* {id}
+  Kill the agent with the given numeric `id`. Stops the underlying job and
+  marks the agent as exited.
+
+*:AgentKillAll*
+  Kill every currently running agent.
+
+*:AgentFocus* {id}
+  Open or jump to the terminal buffer for the agent with the given `id`.
+  If the buffer is already visible in a window, focus switches to that window.
+  Otherwise a new split is opened according to the `split` config option.
+
+==============================================================================
+4. KEYMAPS                                                  *agent.nvim-keymaps*
+
+Default keymaps (normal mode). All are overridable; set `keymaps = false` to
+disable all of them.
+
+  Key           Action
+  -----------   -------------------------------------------------------
+  <leader>as    :AgentSpawn (uses default agent type)
+  <leader>al    :AgentList
+  <leader>ak    Pick an agent via vim.ui.select and kill it
+  <leader>af    Pick an agent via vim.ui.select and focus it
+
+==============================================================================
+5. CONFIGURATION                                             *agent.nvim-config*
+
+Full config table with defaults: >lua
+
+  require("agent").setup({
+    -- Default agent type used by :AgentSpawn with no argument
+    default_agent = "claude",   -- "claude" | "codex"
+
+    -- Shell commands executed for each agent type
+    commands = {
+      claude = "claude",
+      codex  = "codex",
+    },
+
+    -- Normal-mode keymaps. Set to false to disable all keymaps.
+    keymaps = {
+      spawn = "<leader>as",
+      list  = "<leader>al",
+      kill  = "<leader>ak",
+      focus = "<leader>af",
+    },
+
+    -- How to open an agent buffer when focusing
+    split = "horizontal",       -- "horizontal" | "vertical" | "float"
+  })
+<
+
+==============================================================================
+6. AGENT MANAGER UI                                             *agent.nvim-ui*
+
+`:AgentList` opens a centered floating window (60 % of editor dimensions).
+
+  Line format: >
+    [id]  type        status
+<
+Keymaps inside the manager:
+
+  <CR>    Focus the agent under cursor (closes the manager first)
+  x       Kill the agent under cursor (refreshes the list in place)
+  q       Close the manager
+  <Esc>   Close the manager
+
+==============================================================================
+vim:ft=help:tw=78:ts=8:norl:
