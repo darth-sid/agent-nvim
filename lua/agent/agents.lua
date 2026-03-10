@@ -21,17 +21,19 @@ function M.spawn(agent_type, opts)
   local id = next_id
   next_id = next_id + 1
 
-  local job_id = vim.fn.jobstart(cmd, {
-    term   = true,
-    buf    = bufnr,
-    on_exit = function()
-      if M.registry[id] then
-        M.registry[id].status = "exited"
-      end
-    end,
-  })
+  local job_id
+  local ok = pcall(vim.api.nvim_buf_call, bufnr, function()
+    job_id = vim.fn.jobstart(cmd, {
+      term    = true,
+      on_exit = function()
+        if M.registry[id] then
+          M.registry[id].status = "exited"
+        end
+      end,
+    })
+  end)
 
-  if job_id <= 0 then
+  if not ok or job_id <= 0 then
     vim.api.nvim_buf_delete(bufnr, { force = true })
     vim.notify("agent.nvim: failed to start job for " .. t, vim.log.levels.ERROR)
     return nil

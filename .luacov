@@ -1,0 +1,9 @@
+runner = "default"
+statsfile = "luacov.stats.out"
+reportfile = "luacov.report.out"
+include = {
+  "lua/agent/.*",
+}
+exclude = {
+  "tests/.*",
+}
