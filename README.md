@@ -110,4 +110,4 @@ The script expects `nvim`, `luarocks`, and the `luacov` rock to be available.
 
 ## License
 
-No license file is included yet. Pick one before publishing for public reuse.
+MIT
