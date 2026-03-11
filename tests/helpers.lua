@@ -36,7 +36,7 @@ function M.reset_plugin_modules()
 end
 
 function M.cleanup_user_commands()
-  for _, name in ipairs({ "AgentSpawn", "AgentList", "AgentKill", "AgentKillAll", "AgentFocus" }) do
+  for _, name in ipairs({ "AgentSpawn", "AgentList", "AgentKill", "AgentKillAll", "AgentFocus", "AgentRename" }) do
     pcall(vim.api.nvim_del_user_command, name)
   end
 end

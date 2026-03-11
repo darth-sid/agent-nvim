@@ -2,9 +2,11 @@ local T = require("tests.helpers")
 
 T.test("agent.setup registers commands and routes each command correctly", function()
   local recorded = {
-    spawn = {},
+    spawn_prompt = {},
     kills = {},
     focus = {},
+    rename = {},
+    rename_prompt = {},
     pick_prompts = {},
   }
 
@@ -21,8 +23,8 @@ T.test("agent.setup registers commands and routes each command correctly", funct
   }
 
   package.loaded["agent.agents"] = {
-    spawn = function(agent_type)
-      table.insert(recorded.spawn, agent_type)
+    spawn_prompt = function(agent_type)
+      table.insert(recorded.spawn_prompt, agent_type)
     end,
     kill = function(id)
       table.insert(recorded.kills, id)
@@ -32,6 +34,12 @@ T.test("agent.setup registers commands and routes each command correctly", funct
     end,
     focus = function(id)
       table.insert(recorded.focus, id)
+    end,
+    rename = function(id, label)
+      table.insert(recorded.rename, { id = id, label = label })
+    end,
+    rename_prompt = function(id)
+      table.insert(recorded.rename_prompt, id)
     end,
     pick_id = function(prompt, callback)
       table.insert(recorded.pick_prompts, prompt)
@@ -54,22 +62,31 @@ T.test("agent.setup registers commands and routes each command correctly", funct
   vim.cmd("AgentKill 9")
   vim.cmd("AgentKillAll")
   vim.cmd("AgentFocus 5")
-  vim.cmd("AgentKill nope")
-  vim.cmd("AgentFocus nope")
+  vim.cmd("AgentRename 4 named session")
+  vim.cmd("AgentKill notes")
+  vim.cmd("AgentFocus review")
+  vim.cmd("AgentRename pair mob session")
+  vim.cmd("AgentRename 8")
 
   restore_notify()
-  T.eq(recorded.spawn[1], "codex")
+  T.eq(recorded.spawn_prompt[1], "codex")
   T.truthy(recorded.listed)
   T.eq(recorded.kills[1], 9)
+  T.eq(recorded.kills[2], "notes")
   T.truthy(recorded.kill_all)
   T.eq(recorded.focus[1], 5)
-  T.matches(notifications[1].message, "requires a numeric id")
-  T.matches(notifications[2].message, "requires a numeric id")
+  T.eq(recorded.focus[2], "review")
+  T.eq(recorded.rename[1].id, 4)
+  T.eq(recorded.rename[1].label, "named session")
+  T.eq(recorded.rename[2].id, "pair")
+  T.eq(recorded.rename[2].label, "mob session")
+  T.eq(recorded.rename_prompt[1], 8)
+  T.eq(#notifications, 0)
 end)
 
 T.test("agent.setup installs keymaps and dispatches mapped actions", function()
   local recorded = {
-    spawn = 0,
+    spawn_prompt = 0,
     list = 0,
     kill = {},
     focus = {},
@@ -91,8 +108,8 @@ T.test("agent.setup installs keymaps and dispatches mapped actions", function()
   }
 
   package.loaded["agent.agents"] = {
-    spawn = function()
-      recorded.spawn = recorded.spawn + 1
+    spawn_prompt = function()
+      recorded.spawn_prompt = recorded.spawn_prompt + 1
     end,
     kill = function(id)
       table.insert(recorded.kill, id)
@@ -121,7 +138,7 @@ T.test("agent.setup installs keymaps and dispatches mapped actions", function()
   T.feed("zk")
   T.feed("zf")
 
-  T.eq(recorded.spawn, 1)
+  T.eq(recorded.spawn_prompt, 1)
   T.eq(recorded.list, 1)
   T.eq(recorded.kill[1], 11)
   T.eq(recorded.focus[1], 12)

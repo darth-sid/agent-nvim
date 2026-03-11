@@ -19,7 +19,7 @@ T.test("config.setup deep merges nested tables", function()
     default_agent = "codex",
     commands = { claude = "claude --dangerously-skip-permissions" },
     keymaps = { spawn = "zs" },
-    split = "float",
+    split = "current",
   })
 
   T.eq(config.opts.default_agent, "codex")
@@ -27,5 +27,5 @@ T.test("config.setup deep merges nested tables", function()
   T.eq(config.opts.commands.codex, "codex")
   T.eq(config.opts.keymaps.spawn, "zs")
   T.eq(config.opts.keymaps.list, "<leader>al")
-  T.eq(config.opts.split, "float")
+  T.eq(config.opts.split, "current")
 end)

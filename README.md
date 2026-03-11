@@ -5,7 +5,9 @@ Lightweight Neovim plugin for spawning and managing Codex or Claude agents in de
 ## Features
 
 - Spawn multiple agent sessions as hidden terminal buffers
-- Focus existing sessions in horizontal, vertical, or floating windows
+- Default session names to their numeric IDs and let you rename them later
+- Prompt for a unique session name when creating a new agent
+- Focus existing sessions in the current window, splits, or floating windows
 - List and kill running agents from commands or keymaps
 - No runtime dependencies beyond Neovim
 
@@ -54,6 +56,7 @@ require("agent").setup({
     focus = "<leader>af",
   },
   split = "horizontal",
+  -- "horizontal" | "vertical" | "float" | "current"
 })
 ```
 
@@ -63,9 +66,13 @@ Set `keymaps = false` to disable all default mappings.
 
 - `:AgentSpawn [type]`
 - `:AgentList`
-- `:AgentKill {id}`
+- `:AgentKill {id|name}`
 - `:AgentKillAll`
-- `:AgentFocus {id}`
+- `:AgentFocus {id|name}`
+- `:AgentRename {id|name} [label]`
+
+`{name}` lookups are exact matches against running agent labels. New labels must
+be unique among running agents.
 
 ## Default Keymaps
 
@@ -78,9 +85,15 @@ Set `keymaps = false` to disable all default mappings.
 
 Run `:AgentList` to open the floating manager UI.
 
+- Session rows always include the numeric ID and current label
+- Agent terminal buffer names include ID, label, type, and status so standard statuslines show the full session info
 - `<CR>` focuses the selected agent
+- `r` renames the selected agent
 - `x` kills the selected agent
 - `q` or `<Esc>` closes the manager
+
+When `:AgentSpawn` opens its prompt, pressing `<CR>` with a blank value falls
+back to the next numeric ID and cancelling the prompt creates nothing.
 
 ## Clipboard and Terminal Tips
 

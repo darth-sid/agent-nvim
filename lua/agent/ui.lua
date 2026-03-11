@@ -6,11 +6,11 @@ local function make_lines(agents)
     table.insert(lines, "  (no agents)")
   else
     for _, a in ipairs(agents) do
-      table.insert(lines, string.format("  [%d]  %-10s  %s", a.id, a.type, a.status))
+      table.insert(lines, string.format("  [%d]  %-20s  %s", a.id, a.label, a.status))
     end
   end
   table.insert(lines, "")
-  table.insert(lines, "  <CR> focus  x kill  q/<Esc> close")
+  table.insert(lines, "  <CR> focus  r rename  x kill  q/<Esc> close")
   return lines
 end
 
@@ -65,6 +65,17 @@ function M.open_manager()
 
   local opts = { buffer = buf, nowait = true, noremap = true, silent = true }
 
+  local function refresh()
+    if not vim.api.nvim_win_is_valid(win) or not vim.api.nvim_buf_is_valid(buf) then
+      return
+    end
+    agents = agents_mod.list()
+    local new_lines = make_lines(agents)
+    vim.api.nvim_set_option_value("modifiable", true, { buf = buf })
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, new_lines)
+    vim.api.nvim_set_option_value("modifiable", false, { buf = buf })
+  end
+
   -- <CR>: focus agent under cursor
   vim.keymap.set("n", "<CR>", function()
     local a = agent_at_cursor(buf, agents)
@@ -79,12 +90,18 @@ function M.open_manager()
     local a = agent_at_cursor(buf, agents)
     if a then
       agents_mod.kill(a.id)
-      -- Refresh the buffer contents
-      agents = agents_mod.list()
-      local new_lines = make_lines(agents)
-      vim.api.nvim_set_option_value("modifiable", true, { buf = buf })
-      vim.api.nvim_buf_set_lines(buf, 0, -1, false, new_lines)
-      vim.api.nvim_set_option_value("modifiable", false, { buf = buf })
+      refresh()
+    end
+  end, opts)
+
+  vim.keymap.set("n", "r", function()
+    local a = agent_at_cursor(buf, agents)
+    if a then
+      agents_mod.rename_prompt(a.id, function(renamed)
+        if renamed then
+          refresh()
+        end
+      end)
     end
   end, opts)
 

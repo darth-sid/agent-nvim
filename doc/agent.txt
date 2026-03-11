@@ -41,23 +41,36 @@ To disable all keymaps: >lua
 
 *:AgentSpawn* [type]
   Spawn a new agent. `type` is optional and defaults to `default_agent` in
-  config. Accepted values: `claude`, `codex`.
+  config. Accepted values: `claude`, `codex`. A name prompt opens before the
+  agent is created, prefilled with the next numeric id. Agent names must be
+  unique.
 
 *:AgentList*
   Open the agent manager floating window. Lists all agents with their id,
-  type, and status.
+  label, and status.
 
-*:AgentKill* {id}
-  Kill the agent with the given numeric `id`. Stops the underlying job and
-  marks the agent as exited.
+*:AgentKill* {id|name}
+  Kill the agent with the given numeric `id` or exact label. Stops the
+  underlying job and marks the agent as exited. Name matches only consider
+  running agents.
 
 *:AgentKillAll*
   Kill every currently running agent.
 
-*:AgentFocus* {id}
-  Open or jump to the terminal buffer for the agent with the given `id`.
+*:AgentFocus* {id|name}
+  Open or jump to the terminal buffer for the agent with the given `id` or
+  exact label. Name matches only consider running agents.
   If the buffer is already visible in a window, focus switches to that window.
-  Otherwise a new split is opened according to the `split` config option.
+  Otherwise the current window is reused or a new split/float is opened
+  according to the `split` config option.
+
+*:AgentRename* {id|name} [label]
+  Rename the agent with the given numeric `id` or exact label. If `label` is
+  omitted, a prompt is opened with the current label prefilled. Agent names
+  must be unique among running agents.
+
+If the `:AgentSpawn` prompt is cancelled, no agent is created. If the prompt is
+submitted with a blank value, the next numeric id is used as the label.
 
 ==============================================================================
 4. KEYMAPS                                                  *agent.nvim-keymaps*
@@ -96,7 +109,7 @@ Full config table with defaults: >lua
     },
 
     -- How to open an agent buffer when focusing
-    split = "horizontal",       -- "horizontal" | "vertical" | "float"
+    split = "horizontal",       -- "horizontal" | "vertical" | "float" | "current"
   })
 <
 
@@ -106,11 +119,15 @@ Full config table with defaults: >lua
 `:AgentList` opens a centered floating window (60 % of editor dimensions).
 
   Line format: >
-    [id]  type        status
+    [id]  label       status
 <
+
+  Agent terminal buffer names include id, label, agent type, and status so
+  standard statuslines show the full session info.
 Keymaps inside the manager:
 
   <CR>    Focus the agent under cursor (closes the manager first)
+  r       Rename the agent under cursor and refresh the list in place
   x       Kill the agent under cursor (refreshes the list in place)
   q       Close the manager
   <Esc>   Close the manager
