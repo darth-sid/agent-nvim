@@ -25,6 +25,12 @@ local function agent_at_cursor(buf, agents)
   return nil
 end
 
+local function move_cursor_to_first_agent(win, agents)
+  if #agents > 0 and vim.api.nvim_win_is_valid(win) then
+    vim.api.nvim_win_set_cursor(win, { 4, 0 })
+  end
+end
+
 function M.open_manager()
   local agents_mod = require("agent.agents")
   local agents = agents_mod.list()
@@ -49,6 +55,7 @@ function M.open_manager()
     style    = "minimal",
     border   = "rounded",
   })
+  move_cursor_to_first_agent(win, agents)
 
   local function close()
     if vim.api.nvim_win_is_valid(win) then

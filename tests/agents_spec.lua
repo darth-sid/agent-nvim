@@ -43,6 +43,22 @@ T.test("agents.spawn attaches terminal to tracked buffer instead of current buff
   T.wait_for_job(agent.job_id)
 end)
 
+T.test("agents.spawn focuses the new agent buffer", function()
+  running_config()
+  local agents = T.reload("agent.agents")
+  local start_win = vim.api.nvim_get_current_win()
+
+  local id = agents.spawn("claude")
+  local agent = agents.registry[id]
+
+  T.truthy(agent)
+  T.eq(vim.api.nvim_get_current_buf(), agent.bufnr)
+  T.falsy(vim.api.nvim_get_current_win() == start_win, "spawn should move focus to the agent window")
+
+  vim.fn.jobstop(agent.job_id)
+  T.wait_for_job(agent.job_id)
+end)
+
 T.test("agents.spawn marks exited when the job finishes", function()
   local config = T.reload("agent.config")
   config.setup({
@@ -125,13 +141,11 @@ T.test("agents.focus opens horizontal, vertical, and floating targets", function
   local config = T.reload("agent.config")
   config.setup({ commands = { claude = { "cat" } }, split = "horizontal" })
   local agents = T.reload("agent.agents")
+  T.new_editor_buffer()
   local id = agents.spawn("claude")
   local agent = agents.registry[id]
-  local initial_wins = #vim.api.nvim_list_wins()
-
-  agents.focus(id)
-  T.eq(#vim.api.nvim_list_wins(), initial_wins + 1)
   T.eq(vim.api.nvim_get_current_buf(), agent.bufnr)
+  T.eq(#vim.api.nvim_list_wins(), 2)
 
   T.close_extra_windows()
   T.new_editor_buffer()
