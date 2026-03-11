@@ -5,10 +5,9 @@ Lightweight Neovim plugin for spawning and managing Codex or Claude agents in de
 ## Features
 
 - Spawn multiple agent sessions as hidden terminal buffers
-- Default session names to their numeric IDs and let you rename them later
-- Prompt for a unique session name when creating a new agent
 - Focus existing sessions in the current window, splits, or floating windows
 - List and kill running agents from commands or keymaps
+- Contain agent sessions in independent worktrees (requires git)
 - No runtime dependencies beyond Neovim
 
 ## Requirements
