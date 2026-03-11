@@ -23,8 +23,11 @@ T.test("agent.setup registers commands and routes each command correctly", funct
   }
 
   package.loaded["agent.agents"] = {
-    spawn_prompt = function(agent_type)
-      table.insert(recorded.spawn_prompt, agent_type)
+    spawn_prompt_with_opts = function(agent_type, opts)
+      table.insert(recorded.spawn_prompt, {
+        agent_type = agent_type,
+        worktree = opts and opts.worktree or false,
+      })
     end,
     kill = function(id)
       table.insert(recorded.kills, id)
@@ -58,6 +61,7 @@ T.test("agent.setup registers commands and routes each command correctly", funct
   agent.setup({ keymaps = false })
 
   vim.cmd("AgentSpawn codex")
+  vim.cmd("AgentSpawn! claude")
   vim.cmd("AgentList")
   vim.cmd("AgentKill 9")
   vim.cmd("AgentKillAll")
@@ -69,7 +73,10 @@ T.test("agent.setup registers commands and routes each command correctly", funct
   vim.cmd("AgentRename 8")
 
   restore_notify()
-  T.eq(recorded.spawn_prompt[1], "codex")
+  T.eq(recorded.spawn_prompt[1].agent_type, "codex")
+  T.eq(recorded.spawn_prompt[1].worktree, false)
+  T.eq(recorded.spawn_prompt[2].agent_type, "claude")
+  T.eq(recorded.spawn_prompt[2].worktree, true)
   T.truthy(recorded.listed)
   T.eq(recorded.kills[1], 9)
   T.eq(recorded.kills[2], "notes")
@@ -108,8 +115,9 @@ T.test("agent.setup installs keymaps and dispatches mapped actions", function()
   }
 
   package.loaded["agent.agents"] = {
-    spawn_prompt = function()
+    spawn_prompt_with_opts = function(_, opts)
       recorded.spawn_prompt = recorded.spawn_prompt + 1
+      recorded.spawn_worktree = opts and opts.worktree or false
     end,
     kill = function(id)
       table.insert(recorded.kill, id)
@@ -139,9 +147,58 @@ T.test("agent.setup installs keymaps and dispatches mapped actions", function()
   T.feed("zf")
 
   T.eq(recorded.spawn_prompt, 1)
+  T.eq(recorded.spawn_worktree, false)
   T.eq(recorded.list, 1)
   T.eq(recorded.kill[1], 11)
   T.eq(recorded.focus[1], 12)
   T.eq(recorded.prompts[1], "Kill agent:")
   T.eq(recorded.prompts[2], "Focus agent:")
+end)
+
+T.test("agent.setup commands validate blank args", function()
+  local recorded = {}
+  local commands = {}
+
+  package.loaded["agent.config"] = {
+    opts = { keymaps = false },
+    setup = function()
+      package.loaded["agent.config"].opts = { keymaps = false }
+    end,
+  }
+
+  package.loaded["agent.agents"] = {
+    kill = function(id) recorded.kill = id end,
+    focus = function(id) recorded.focus = id end,
+    rename = function(id, label) recorded.rename = { id = id, label = label } end,
+    rename_prompt = function(id) recorded.rename_prompt = id end,
+    spawn_prompt_with_opts = function() end,
+    kill_all = function() end,
+    pick_id = function() end,
+  }
+
+  package.loaded["agent.ui"] = {
+    open_manager = function() end,
+  }
+
+  local restore_create = T.stub(vim.api, "nvim_create_user_command", function(name, fn)
+    commands[name] = fn
+  end)
+  local notifications, restore_notify = T.capture_notify()
+  local agent = T.reload("agent")
+  agent.setup({ keymaps = false })
+
+  commands.AgentKill({ args = "   " })
+  commands.AgentFocus({ args = "   " })
+  commands.AgentRename({ fargs = { "" } })
+
+  restore_create()
+  restore_notify()
+
+  T.eq(recorded.kill, nil)
+  T.eq(recorded.focus, nil)
+  T.eq(recorded.rename, nil)
+  T.eq(recorded.rename_prompt, nil)
+  T.matches(notifications[1].message, "AgentKill requires an agent id or name")
+  T.matches(notifications[2].message, "AgentFocus requires an agent id or name")
+  T.matches(notifications[3].message, "AgentRename requires an agent id or name")
 end)

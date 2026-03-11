@@ -49,6 +49,11 @@ require("agent").setup({
     claude = "claude",
     codex = "codex",
   },
+  git_worktree = {
+    enabled = false,
+    root = ".agent-worktrees",
+    branch_prefix = "agent/",
+  },
   keymaps = {
     spawn = "<leader>as",
     list = "<leader>al",
@@ -62,9 +67,14 @@ require("agent").setup({
 
 Set `keymaps = false` to disable all default mappings.
 
+Set `git_worktree.enabled = true` to always spawn agents in fresh git
+worktrees rooted under `root`. By default worktrees are created as sibling
+checkouts under `.agent-worktrees/` with branches named
+`agent/{id}-{label-slug}`.
+
 ## Commands
 
-- `:AgentSpawn [type]`
+- `:AgentSpawn[!] [type]`
 - `:AgentList`
 - `:AgentKill {id|name}`
 - `:AgentKillAll`
@@ -74,9 +84,12 @@ Set `keymaps = false` to disable all default mappings.
 `{name}` lookups are exact matches against running agent labels. New labels must
 be unique among running agents.
 
+Use `:AgentSpawn!` to force the new session into a fresh git worktree for the
+current repository even when `git_worktree.enabled = false`.
+
 ## Default Keymaps
 
-- `<leader>as` spawns the default agent
+- `<leader>as` spawns the default agent in the current checkout
 - `<leader>al` opens the agent manager
 - `<leader>ak` picks and kills an agent
 - `<leader>af` picks and focuses an agent
@@ -94,6 +107,10 @@ Run `:AgentList` to open the floating manager UI.
 
 When `:AgentSpawn` opens its prompt, pressing `<CR>` with a blank value falls
 back to the next numeric ID and cancelling the prompt creates nothing.
+
+When a session is spawned in a git worktree, the terminal job starts with its
+working directory set to that worktree path. The worktree is left on disk after
+the agent exits.
 
 ## Clipboard and Terminal Tips
 
@@ -115,6 +132,8 @@ bash scripts/test.sh
 ```
 
 The script expects `nvim`, `luarocks`, and the `luacov` rock to be available.
+It refreshes `luacov.stats.out` and writes a text coverage report to
+`luacov.report.out`.
 
 ## Roadmap Gaps
 

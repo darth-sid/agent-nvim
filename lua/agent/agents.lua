@@ -94,7 +94,84 @@ local function sync_agent_metadata(agent)
   end
 end
 
--- Spawn a new agent of the given type. opts is reserved for future use.
+local function shell_error_output(result)
+  if type(result) == "table" then
+    return vim.trim(table.concat(result, "\n"))
+  end
+  return vim.trim(tostring(result or ""))
+end
+
+local function git_system(args, cwd)
+  local command = vim.deepcopy(args)
+  if cwd then
+    table.insert(command, 2, "-C")
+    table.insert(command, 3, cwd)
+  end
+  local result = vim.fn.system(command)
+  return vim.v.shell_error, result
+end
+
+local function sanitize_worktree_segment(label)
+  local value = tostring(label or ""):lower()
+  value = value:gsub("[^a-z0-9]+", "-")
+  value = value:gsub("^%-+", ""):gsub("%-+$", "")
+  if value == "" then
+    return "agent"
+  end
+  return value
+end
+
+M._run_git = git_system
+M._mkdir = function(path)
+  vim.fn.mkdir(path, "p")
+end
+
+local function should_use_worktree(opts, config)
+  if opts.worktree ~= nil then
+    return opts.worktree
+  end
+  return config.opts.git_worktree and config.opts.git_worktree.enabled or false
+end
+
+local function prepare_worktree(id, label)
+  local config = require("agent.config")
+  local worktree_config = config.opts.git_worktree or {}
+
+  local code, root_result = M._run_git({ "git", "rev-parse", "--show-toplevel" })
+  local repo_root = code == 0 and vim.trim(root_result or "") or ""
+  if repo_root == "" then
+    vim.notify("agent.nvim: git worktree spawn requires a git repository", vim.log.levels.ERROR)
+    return nil
+  end
+
+  local slug = sanitize_worktree_segment(label)
+  local relative_root = worktree_config.root or ".agent-worktrees"
+  local worktree_root = vim.fs.normalize(repo_root .. "/" .. relative_root)
+  M._mkdir(worktree_root)
+
+  local branch_prefix = worktree_config.branch_prefix or "agent/"
+  local suffix = string.format("%d-%s", id, slug)
+  local branch = branch_prefix .. suffix
+  local path = vim.fs.normalize(worktree_root .. "/" .. suffix)
+
+  local add_args = { "git", "worktree", "add", "-b", branch, path }
+  local add_code, add_result = M._run_git(add_args, repo_root)
+  if add_code ~= 0 then
+    local message = shell_error_output(add_result)
+    if message == "" then
+      message = "git worktree add failed"
+    end
+    vim.notify("agent.nvim: " .. message, vim.log.levels.ERROR)
+    return nil
+  end
+
+  return {
+    path = path,
+    branch = branch,
+    repo_root = repo_root,
+  }
+end
+
 function M.spawn(agent_type, opts)
   opts = opts or {}
   local config = require("agent.config")
@@ -112,11 +189,27 @@ function M.spawn(agent_type, opts)
 
   local id = next_id
   next_id = next_id + 1
+  local label = sanitize_label(opts.label) or default_label_for(id)
+  if label_in_use(label, id) then
+    vim.api.nvim_buf_delete(bufnr, { force = true })
+    vim.notify("agent.nvim: agent name must be unique: " .. label, vim.log.levels.ERROR)
+    return nil
+  end
+
+  local worktree
+  if should_use_worktree(opts, config) then
+    worktree = prepare_worktree(id, label)
+    if not worktree then
+      vim.api.nvim_buf_delete(bufnr, { force = true })
+      return nil
+    end
+  end
 
   local job_id
   local ok = pcall(vim.api.nvim_buf_call, bufnr, function()
     job_id = vim.fn.jobstart(cmd, {
       term    = true,
+      cwd     = worktree and worktree.path or nil,
       on_exit = function()
         if M.registry[id] then
           M.registry[id].status = "exited"
@@ -138,20 +231,19 @@ function M.spawn(agent_type, opts)
     status = "running",
     bufnr  = bufnr,
     job_id = job_id,
-    label  = sanitize_label(opts.label) or default_label_for(id),
+    label  = label,
+    worktree = worktree,
   }
-  if label_in_use(agent.label, id) then
-    vim.api.nvim_buf_delete(bufnr, { force = true })
-    vim.fn.jobstop(job_id)
-    vim.notify("agent.nvim: agent name must be unique: " .. agent.label, vim.log.levels.ERROR)
-    return nil
-  end
   M.registry[id] = agent
   sync_agent_metadata(agent)
   if opts.focus ~= false then
     M.focus(id)
   end
-  vim.notify("agent.nvim: spawned " .. format_agent_label(agent), vim.log.levels.INFO)
+  local message = "agent.nvim: spawned " .. format_agent_label(agent)
+  if worktree then
+    message = message .. " in git worktree " .. worktree.path
+  end
+  vim.notify(message, vim.log.levels.INFO)
   return id
 end
 
@@ -202,6 +294,15 @@ function M.rename(ref, label)
 end
 
 function M.spawn_prompt(agent_type, callback)
+  return M.spawn_prompt_with_opts(agent_type, nil, callback)
+end
+
+function M.spawn_prompt_with_opts(agent_type, opts, callback)
+  if type(opts) == "function" and callback == nil then
+    callback = opts
+    opts = nil
+  end
+  opts = opts or {}
   local t = resolve_agent_type(agent_type)
   local default_label = default_label_for(next_id)
   vim.ui.input({
@@ -217,6 +318,7 @@ function M.spawn_prompt(agent_type, callback)
 
     local id = M.spawn(t, {
       label = sanitize_label(input) or default_label,
+      worktree = opts.worktree,
     })
     if callback then
       callback(id)

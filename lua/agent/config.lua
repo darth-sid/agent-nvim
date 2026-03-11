@@ -6,6 +6,11 @@ local defaults = {
     claude = "claude",
     codex  = "codex",
   },
+  git_worktree = {
+    enabled = false,
+    root = ".agent-worktrees",
+    branch_prefix = "agent/",
+  },
   keymaps = {
     spawn = "<leader>as",
     list  = "<leader>al",

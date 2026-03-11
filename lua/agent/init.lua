@@ -15,9 +15,10 @@ function M.setup(opts)
   -- Commands
   vim.api.nvim_create_user_command("AgentSpawn", function(args)
     local t = args.args ~= "" and args.args or nil
-    agents.spawn_prompt(t)
+    agents.spawn_prompt_with_opts(t, { worktree = args.bang })
   end, {
     nargs = "?",
+    bang = true,
     complete = function() return { "claude", "codex" } end,
     desc = "Spawn an AI agent",
   })

@@ -265,6 +265,182 @@ T.test("agents.spawn accepts an explicit label", function()
   T.wait_for_job(agent.job_id)
 end)
 
+T.test("agents.spawn creates a git worktree and starts the job there", function()
+  local config = T.reload("agent.config")
+  config.setup({
+    commands = { claude = { "cat" } },
+    git_worktree = {
+      enabled = false,
+      root = ".agent-worktrees",
+      branch_prefix = "agent/",
+    },
+  })
+  local agents = T.reload("agent.agents")
+
+  local system_calls = {}
+  local created_dirs = {}
+  local started = {}
+
+  local restore_git = T.stub(agents, "_run_git", function(cmd, cwd)
+    table.insert(system_calls, { cmd = cmd, cwd = cwd })
+    if vim.deep_equal(cmd, { "git", "rev-parse", "--show-toplevel" }) then
+      return 0, "/tmp/repo\n"
+    end
+    return 0, ""
+  end)
+  local restore_mkdir = T.stub(agents, "_mkdir", function(path)
+    table.insert(created_dirs, path)
+  end)
+  local restore_jobstart = T.stub(vim.fn, "jobstart", function(cmd, opts)
+    started.cmd = cmd
+    started.cwd = opts.cwd
+    started.term = opts.term
+    started.on_exit = opts.on_exit
+    return 17
+  end)
+
+  local id = agents.spawn("claude", { label = "Pairing Session", worktree = true, focus = false })
+
+  restore_jobstart()
+  restore_mkdir()
+  restore_git()
+
+  T.eq(id, 1)
+  T.eq(created_dirs[1], "/tmp/repo/.agent-worktrees")
+  T.eq(system_calls[1].cmd[1], "git")
+  T.eq(system_calls[2].cmd[1], "git")
+  T.eq(system_calls[2].cwd, "/tmp/repo")
+  T.eq(system_calls[2].cmd[2], "worktree")
+  T.eq(system_calls[2].cmd[3], "add")
+  T.eq(system_calls[2].cmd[4], "-b")
+  T.eq(system_calls[2].cmd[5], "agent/1-pairing-session")
+  T.eq(system_calls[2].cmd[6], "/tmp/repo/.agent-worktrees/1-pairing-session")
+  T.eq(started.cmd, config.opts.commands.claude)
+  T.eq(started.cwd, "/tmp/repo/.agent-worktrees/1-pairing-session")
+  T.truthy(started.term)
+  T.eq(agents.registry[id].worktree.path, "/tmp/repo/.agent-worktrees/1-pairing-session")
+  T.eq(agents.registry[id].worktree.branch, "agent/1-pairing-session")
+end)
+
+T.test("agents.spawn can default to git worktrees from config", function()
+  local config = T.reload("agent.config")
+  config.setup({
+    commands = { claude = { "cat" } },
+    git_worktree = {
+      enabled = true,
+      root = ".agent-worktrees",
+      branch_prefix = "agent/",
+    },
+  })
+  local agents = T.reload("agent.agents")
+
+  local restore_git = T.stub(agents, "_run_git", function(cmd)
+    if vim.deep_equal(cmd, { "git", "rev-parse", "--show-toplevel" }) then
+      return 0, "/tmp/repo\n"
+    end
+    return 0, ""
+  end)
+  local restore_mkdir = T.stub(agents, "_mkdir", function()
+  end)
+  local started_cwd
+  local restore_jobstart = T.stub(vim.fn, "jobstart", function(_, opts)
+    started_cwd = opts.cwd
+    return 23
+  end)
+
+  local id = agents.spawn("claude", { focus = false })
+
+  restore_jobstart()
+  restore_mkdir()
+  restore_git()
+
+  T.eq(id, 1)
+  T.eq(started_cwd, "/tmp/repo/.agent-worktrees/1-1")
+end)
+
+T.test("agents.spawn reports git worktree failures", function()
+  local config = T.reload("agent.config")
+  config.setup({
+    commands = { claude = { "cat" } },
+    git_worktree = {
+      enabled = false,
+      root = ".agent-worktrees",
+      branch_prefix = "agent/",
+    },
+  })
+  local agents = T.reload("agent.agents")
+  local notifications, restore_notify = T.capture_notify()
+
+  local restore_git = T.stub(agents, "_run_git", function(cmd)
+    if vim.deep_equal(cmd, { "git", "rev-parse", "--show-toplevel" }) then
+      return 1, "fatal: not a git repository"
+    end
+    return 1, "fatal: unexpected"
+  end)
+
+  local id = agents.spawn("claude", { worktree = true, focus = false })
+
+  restore_git()
+  restore_notify()
+
+  T.eq(id, nil)
+  T.matches(notifications[#notifications].message, "git worktree spawn requires a git repository")
+end)
+
+T.test("agents.spawn reports git worktree add errors", function()
+  local config = T.reload("agent.config")
+  config.setup({
+    commands = { claude = { "cat" } },
+    git_worktree = {
+      enabled = false,
+      root = ".agent-worktrees",
+      branch_prefix = "agent/",
+    },
+  })
+  local agents = T.reload("agent.agents")
+  local notifications, restore_notify = T.capture_notify()
+
+  local restore_git = T.stub(agents, "_run_git", function(cmd)
+    if vim.deep_equal(cmd, { "git", "rev-parse", "--show-toplevel" }) then
+      return 0, "/tmp/repo\n"
+    end
+    return 1, ""
+  end)
+  local restore_mkdir = T.stub(agents, "_mkdir", function() end)
+
+  local id = agents.spawn("claude", { worktree = true, focus = false })
+
+  restore_mkdir()
+  restore_git()
+  restore_notify()
+
+  T.eq(id, nil)
+  T.matches(notifications[#notifications].message, "git worktree add failed")
+end)
+
+T.test("agents._run_git executes git commands with optional cwd", function()
+  local agents = T.reload("agent.agents")
+
+  local code, result = agents._run_git({ "git", "rev-parse", "--is-inside-work-tree" })
+  T.eq(code, 0)
+  T.matches(vim.trim(result), "true")
+
+  code, result = agents._run_git({ "git", "rev-parse", "--show-toplevel" }, vim.fn.getcwd())
+  T.eq(code, 0)
+  T.truthy(vim.trim(result) ~= "")
+end)
+
+T.test("agents._mkdir creates directories", function()
+  local agents = T.reload("agent.agents")
+  local target = vim.fn.getcwd() .. "/.tmp-agent-test-dir"
+
+  pcall(vim.fn.delete, target, "rf")
+  agents._mkdir(target)
+
+  T.eq(vim.fn.isdirectory(target), 1)
+  vim.fn.delete(target, "rf")
+end)
+
 T.test("agents.spawn_prompt collects a name before creating an agent", function()
   running_config()
   local agents = T.reload("agent.agents")
@@ -289,6 +465,46 @@ T.test("agents.spawn_prompt collects a name before creating an agent", function(
 
   vim.fn.jobstop(agent.job_id)
   T.wait_for_job(agent.job_id)
+end)
+
+T.test("agents.spawn_prompt_with_opts forwards the worktree flag", function()
+  running_config()
+  local agents = T.reload("agent.agents")
+  local recorded
+
+  local restore_input = T.stub(vim.ui, "input", function(_, callback)
+    callback("debug run")
+  end)
+  local restore_spawn = T.stub(agents, "spawn", function(agent_type, opts)
+    recorded = { agent_type = agent_type, opts = opts }
+    return 9
+  end)
+
+  local created_id = agents.spawn_prompt_with_opts("claude", { worktree = true }, function() end)
+  restore_spawn()
+  restore_input()
+
+  T.eq(created_id, nil)
+  T.eq(recorded.agent_type, "claude")
+  T.eq(recorded.opts.label, "debug run")
+  T.eq(recorded.opts.worktree, true)
+end)
+
+T.test("agents.spawn_prompt_with_opts accepts callback as second argument", function()
+  running_config()
+  local agents = T.reload("agent.agents")
+  local observed
+
+  local restore_input = T.stub(vim.ui, "input", function(_, callback)
+    callback(nil)
+  end)
+
+  agents.spawn_prompt_with_opts("claude", function(id)
+    observed = id
+  end)
+
+  restore_input()
+  T.eq(observed, nil)
 end)
 
 T.test("agents.spawn_prompt falls back to the agent id for blank input", function()
@@ -364,6 +580,32 @@ T.test("agents.rename_prompt uses vim.ui.input defaults and applies the rename",
   T.truthy(renamed)
   T.eq(agents.registry[id].label, "debug run")
 
+  vim.fn.jobstop(agents.registry[id].job_id)
+  T.wait_for_job(agents.registry[id].job_id)
+end)
+
+T.test("agents.rename_prompt handles missing agents and cancelled input", function()
+  running_config()
+  local agents = T.reload("agent.agents")
+  local notifications, restore_notify = T.capture_notify()
+
+  agents.rename_prompt(999, function() error("should not be called") end)
+
+  local id = agents.spawn("claude", { focus = false })
+  local cancelled
+  local restore_input = T.stub(vim.ui, "input", function(_, callback)
+    callback(nil)
+  end)
+
+  agents.rename_prompt(id, function(ok)
+    cancelled = ok
+  end)
+
+  restore_input()
+  restore_notify()
+
+  T.eq(cancelled, false)
+  T.matches(notifications[1].message, "no agent matching 999")
   vim.fn.jobstop(agents.registry[id].job_id)
   T.wait_for_job(agents.registry[id].job_id)
 end)
@@ -480,6 +722,44 @@ T.test("agents.list sorts by id and pick_id delegates selection", function()
   vim.fn.jobstop(agents.registry[second].job_id)
   T.wait_for_job(agents.registry[first].job_id)
   T.wait_for_job(agents.registry[second].job_id)
+end)
+
+T.test("agents.list prunes exited agents and pick_id accepts function-only form", function()
+  running_config()
+  local agents = T.reload("agent.agents")
+
+  agents.registry[10] = {
+    id = 10,
+    label = "old",
+    status = "exited",
+    bufnr = vim.api.nvim_create_buf(false, true),
+    type = "claude",
+    job_id = 0,
+  }
+
+  local id = agents.spawn("claude", { label = "live", focus = false })
+  local selected_prompt
+  local restore_select = T.stub(vim.ui, "select", function(items, opts, callback)
+    selected_prompt = opts.prompt
+    callback(items[1], 1)
+  end)
+
+  local listed = agents.list()
+  local picked
+  agents.pick_id(function(agent_id)
+    picked = agent_id
+  end)
+
+  restore_select()
+
+  T.eq(#listed, 1)
+  T.eq(listed[1].id, id)
+  T.eq(agents.registry[10], nil)
+  T.eq(selected_prompt, "Select agent:")
+  T.eq(picked, id)
+
+  vim.fn.jobstop(agents.registry[id].job_id)
+  T.wait_for_job(agents.registry[id].job_id)
 end)
 
 T.test("agents.pick_id notifies when there are no agents", function()

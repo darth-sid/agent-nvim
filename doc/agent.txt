@@ -45,6 +45,11 @@ To disable all keymaps: >lua
   agent is created, prefilled with the next numeric id. Agent names must be
   unique.
 
+*:AgentSpawn*! [type]
+  Same as `:AgentSpawn`, but forces the new session to start in a fresh git
+  worktree for the current repository. The terminal job `cwd` is set to that
+  worktree path. Worktrees are not removed automatically when the job exits.
+
 *:AgentList*
   Open the agent manager floating window. Lists all agents with their id,
   label, and status.
@@ -100,6 +105,13 @@ Full config table with defaults: >lua
       codex  = "codex",
     },
 
+    -- Spawn agents in fresh git worktrees
+    git_worktree = {
+      enabled = false,
+      root = ".agent-worktrees",
+      branch_prefix = "agent/",
+    },
+
     -- Normal-mode keymaps. Set to false to disable all keymaps.
     keymaps = {
       spawn = "<leader>as",
@@ -112,6 +124,11 @@ Full config table with defaults: >lua
     split = "horizontal",       -- "horizontal" | "vertical" | "float" | "current"
   })
 <
+
+When `git_worktree.enabled = true`, every spawn uses a new worktree rooted at
+`root` under the current repository. Branch names are generated as
+`branch_prefix .. "{id}-{label-slug}"`. Use `:AgentSpawn!` to force a worktree
+spawn even when the default is disabled.
 
 ==============================================================================
 6. AGENT MANAGER UI                                             *agent.nvim-ui*
