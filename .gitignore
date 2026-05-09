@@ -1,3 +1,5 @@
 .nvimlog
+nvim.log
 luacov.report.out
 luacov.stats.out
+.DS_Store

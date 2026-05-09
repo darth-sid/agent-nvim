@@ -397,6 +397,16 @@ function M.focus(ref)
   vim.cmd("startinsert")
 end
 
+function M.refresh_buffers()
+  local prior = vim.o.autoread
+  vim.o.autoread = true
+  local ok, err = pcall(vim.cmd, "checktime")
+  vim.o.autoread = prior
+  if not ok then
+    error(err)
+  end
+end
+
 function M.list()
   local result = {}
   for id, agent in pairs(M.registry) do

@@ -12,10 +12,11 @@ local defaults = {
     branch_prefix = "agent/",
   },
   keymaps = {
-    spawn = "<leader>as",
-    list  = "<leader>al",
-    kill  = "<leader>ak",
-    focus = "<leader>af",
+    spawn   = "<leader>as",
+    list    = "<leader>al",
+    kill    = "<leader>ak",
+    focus   = "<leader>af",
+    refresh = "<leader>ar",
   },
   split = "horizontal",
 }
@@ -40,6 +41,15 @@ function M.setup(opts)
   else
     M.opts = deep_merge(defaults, opts)
   end
+end
+
+function M.prefer(agent_type)
+  if not M.opts.commands[agent_type] then
+    vim.notify("agent.nvim: unknown agent type '" .. agent_type .. "'", vim.log.levels.ERROR)
+    return
+  end
+  M.opts.default_agent = agent_type
+  vim.notify("agent.nvim: default agent set to '" .. agent_type .. "'", vim.log.levels.INFO)
 end
 
 return M

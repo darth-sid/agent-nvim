@@ -19,7 +19,7 @@ function M.setup(opts)
   end, {
     nargs = "?",
     bang = true,
-    complete = function() return { "claude", "codex" } end,
+    complete = function() return vim.tbl_keys(config.opts.commands) end,
     desc = "Spawn an AI agent",
   })
 
@@ -49,6 +49,19 @@ function M.setup(opts)
     agents.focus(parse_agent_ref(target))
   end, { nargs = 1, desc = "Focus agent terminal by id or name" })
 
+  vim.api.nvim_create_user_command("AgentPrefer", function(args)
+    local t = vim.trim(args.args)
+    if t == "" then
+      vim.notify("agent.nvim: :AgentPrefer requires an agent type", vim.log.levels.ERROR)
+      return
+    end
+    config.prefer(t)
+  end, {
+    nargs = 1,
+    complete = function() return vim.tbl_keys(config.opts.commands) end,
+    desc = "Set the default agent type",
+  })
+
   vim.api.nvim_create_user_command("AgentRename", function(args)
     local target = vim.trim(args.fargs[1] or "")
     if target == "" then
@@ -74,8 +87,9 @@ function M.setup(opts)
       end
     end
 
-    map(km.spawn, "<Cmd>AgentSpawn<CR>")
-    map(km.list,  "<Cmd>AgentList<CR>")
+    map(km.spawn,   "<Cmd>AgentSpawn<CR>")
+    map(km.list,    "<Cmd>AgentList<CR>")
+    map(km.refresh, function() agents.refresh_buffers() end)
     map(km.kill,  function()
       agents.pick_id("Kill agent:", function(id)
         agents.kill(id)
